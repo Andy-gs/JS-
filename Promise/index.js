@@ -1,4 +1,5 @@
 // 手写 Promise
+// 以下实现严格依照官方文档实现<MDN || ECMA>
 
 // 硬编码维护困难，改成常量
 const PENDING = 'pending'
@@ -170,6 +171,57 @@ class woPromise {
             this.#run()
         })
     }
+
+    // catch 方法用于在 Promise 链进行错误处理，因为它会返回一个 Promise，所以它可以和 then() 方法一样被链式调用
+    catch(onRejected) {
+        // 成功的回调留空，失败回调传入就行
+        return this.then(undefined, onRejected)
+    }
+
+    // finally 无论成功或者失败都要执行这个回调，通常做一些收尾工作，失败或者成功后需要做一些收尾工作
+    finally(onFinally) {
+        // ES6 规范 / MDN 介绍 finally 返回的 promise 和当前的 promise 的状态是一致的，所以需要完成状态穿透
+        return this.then((data) => {
+            // ES6 规范 / MDN 介绍 onFinally调用时不需要传入任何参数
+            onFinally()
+            // 成功我就返回对应数据
+            return data
+        }, (err) => {
+            onFinally()
+            // 失败我也抛个错误
+            throw err
+        })
+    }
+
+    // 静态方法 resolve
+    static resolve(value) {
+        // 如果 value 是一个 promise 就直接返回
+        // 这里判断是不是 promise 不需要判断 函数/对象 是不是包含 then 方法的<promiseLike>，本来就是返回自个，下面才是对 promiseLike 的处理
+        if(value instanceof woPromise) return value
+        // 静态方法是不能调用实例方法的，记录一下
+        let _resolve, _reject
+        const p = new woPromise((resolve, reject) => {
+            _resolve = resolve
+            _reject = reject
+        })
+        // 判断这个 value 是不是一个 promiseLike
+        if(p.#isPromiseLike(value)) {
+            // 如果是一个 promiseLike，那就调用 then方法，并传入 _resolve 和 _reject
+            value.then(_resolve, _reject)
+        }
+        // 除去以上情况，剩下的情况都是直接调用 resolve
+        else {
+            _resolve(value)
+        }
+        return p
+    }
+
+    // 静态 reject 是无论什么情况都直接返回一个用 promise 包裹的 reason，然后拒绝
+    static reject(reason) {
+        return new woPromise((resolve, reject) => {
+            reject(reason)
+        })
+    }
 }
 
 
@@ -184,4 +236,10 @@ p.then((res) => {
     console.log(res, 'Promise完成')
 }, (err) => {
     console.log(err, 'Promise失败')
+})
+
+new woPromise((resolve, reject) => {
+    reject(123)
+}).finally(() => {
+    console.log('finally')
 })
