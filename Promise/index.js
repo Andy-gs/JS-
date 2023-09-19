@@ -197,7 +197,7 @@ class woPromise {
     static resolve(value) {
         // 如果 value 是一个 promise 就直接返回
         // 这里判断是不是 promise 不需要判断 函数/对象 是不是包含 then 方法的<promiseLike>，本来就是返回自个，下面才是对 promiseLike 的处理
-        if(value instanceof woPromise) return value
+        if (value instanceof woPromise) return value
         // 静态方法是不能调用实例方法的，记录一下
         let _resolve, _reject
         const p = new woPromise((resolve, reject) => {
@@ -205,7 +205,7 @@ class woPromise {
             _reject = reject
         })
         // 判断这个 value 是不是一个 promiseLike
-        if(p.#isPromiseLike(value)) {
+        if (p.#isPromiseLike(value)) {
             // 如果是一个 promiseLike，那就调用 then方法，并传入 _resolve 和 _reject
             value.then(_resolve, _reject)
         }
@@ -221,6 +221,54 @@ class woPromise {
         return new woPromise((resolve, reject) => {
             reject(reason)
         })
+    }
+
+    // 静态方法 all 接收一个可迭代的 promise，是个可迭代的 promise，但是不一定是个数组
+    static all(proms) {
+        // 保存 p 内的 resolve 和 reject，以便外面执行
+        let _resolve, _reject
+        const p = new woPromise((resolve, reject) => {
+            _resolve = resolve
+            _reject = reject
+        })
+        // 边界情况处理
+        // 传入参数处理条件不统一，但是可迭代对象<proms>是可以用 for of 循环的
+        let _count = 0
+        // 数据汇总
+        const result = []
+        // 记录 promise 完成的数量
+        let fullfilledCount = 0
+        // 数据汇总下标
+        let i = 0
+        for (const prom of proms) {
+            const index = i
+            i++
+            _count++
+            // 如果给的数据不是 promise，那就包装一下，把每一项变成 promise
+            // 需要监控成功与否，所以需要调用 then 进行观察
+            // all 的特点就是但凡有一个失败，那所有都失败
+            woPromise.resolve(prom).then((data) => {
+                // 成功就需要把所有成功的数据汇总在 result 数组里进行保存
+                // 但是 all 的数据是有顺序的，而且是按照传入的数据进行汇总的，所以不能用 push，需要用到下标，上面定义一个下标
+                result[index] = data
+
+                // 何时完成 p<promise>
+                // 每完成一个 promise 数量加一
+                fullfilledCount++
+                if (fullfilledCount === _count) {
+                    // 当与整个 promise 数量一致时调用 _resolve，异步代码，循环早就结束了
+                    _resolve(result)
+                }
+            }, _reject)
+        }
+        // 如果是0，就代表一个没有，就直接完成
+        if (_count === 0) {
+            // 完成的数据就是一个空数组
+            _resolve(result)
+        }
+
+        // all 方法返回一个 promise
+        return p
     }
 }
 
@@ -242,4 +290,10 @@ new woPromise((resolve, reject) => {
     reject(123)
 }).finally(() => {
     console.log('finally')
+})
+
+woPromise.all([23, 234, 435, 546, woPromise.reject(1)]).then((data) => {
+    console.log(data)
+}, (err) => {
+    console.log(err)
 })
